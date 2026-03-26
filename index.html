@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matai'an fan Sediment Dataset</title>
+    <!-- Load Plotly for the graphing -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <!-- Load PapaParse for reading the CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; color: #333;}
+        .container { max-width: 1000px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        
+        h1, h2, h3 { color: #2c3e50; }
+        
+        /* Controls and Buttons */
+        .controls { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; background: #e9ecef; padding: 15px; border-radius: 6px;}
+        
+        .sample-selector h4 { margin: 0 0 10px 0; font-size: 16px; display: flex; justify-content: space-between; align-items: center;}
+        .checkbox-list { max-height: 150px; overflow-y: auto; background: white; border: 1px solid #ccc; padding: 10px; border-radius: 4px; display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px;}
+        .checkbox-list label { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 14px;}
+        
+        .selection-buttons { margin-bottom: 10px; }
+        .btn-secondary { background-color: #6c757d; color: white; border: none; padding: 6px 12px; font-size: 14px; border-radius: 4px; cursor: pointer;}
+        .btn-secondary:hover { background-color: #5a6268; }
+        
+        .btn-success { background-color: #28a745; color: white; border: none; padding: 12px 20px; font-size: 18px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: background 0.3s;}
+        .btn-success:hover { background-color: #218838; }
+        
+        /* Plot, Tables, and Map Areas */
+        #plot { width: 100%; height: 500px; margin-bottom: 30px; border: 1px solid #eee; border-radius: 4px;}
+        
+        .dynamic-table-container { margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;}
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #f8f9fa; }
+        td:first-child { font-weight: bold; }
+
+        .map-container { text-align: center; margin-top: 20px; border-top: 2px solid #eee; padding-top: 20px;}
+        .map-container img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+        
+        .download-section { margin-top: 30px; text-align: center; padding: 20px; background: #e8f5e9; border-radius: 6px; border: 1px solid #c8e6c9;}
+
+        /* Data Dictionary Table Styles */
+        .data-dictionary { margin-top: 20px; padding-top: 20px;}
+        .data-dictionary table { font-size: 13px; }
+        .data-dictionary td { text-align: left; }
+        .data-dictionary td:first-child { font-family: monospace; font-size: 14px; color: #d63384; width: 35%;}
+        .category-row td { background-color: #e9ecef; font-weight: bold; text-align: center !important; font-size: 15px; color: #2c3e50; font-family: Arial, sans-serif;}
+
+        /* Note Section Styles */
+        .dataset-notes { margin-top: 20px; font-size: 13px; color: #444; background-color: #fff8e1; padding: 15px; border-left: 4px solid #ffc107; border-radius: 4px;}
+        .dataset-notes ul { margin-top: 8px; margin-bottom: 0; padding-left: 20px; line-height: 1.6;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Matai'an Fan Sediment Dataset</h1>
+    <p>Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves. The table below the chart will update automatically to show their corresponding parameters.</p>
+    
+    <div class="controls">
+        <div class="sample-selector">
+            <h4>
+                Select Sample IDs:
+            </h4>
+            <div class="selection-buttons">
+                <button type="button" id="selectAllBtn" class="btn-secondary">Select All</button>
+                <button type="button" id="clearAllBtn" class="btn-secondary">Clear All</button>
+            </div>
+            <div class="checkbox-list" id="checkboxList">
+                Loading samples...
+            </div>
+        </div>
+    </div>
+
+    <!-- Plotly Chart -->
+    <div id="plot"></div>
+
+    <!-- Dynamic Selected Parameters Table -->
+    <div class="dynamic-table-container">
+        <h3>Selected Sample Parameters</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Sample ID</th>
+                    <th>D<sub>60</sub> (mm)</th>
+                    <th>D<sub>50</sub> (mm)</th>
+                    <th>D<sub>30</sub> (mm)</th>
+                    <th>D<sub>10</sub> (mm)</th>
+                    <th>C<sub>u</sub></th>
+                    <th>C<sub>c</sub></th>
+                </tr>
+            </thead>
+            <tbody id="paramsTableBody">
+                <tr>
+                    <td colspan="7" style="color: #777;">No samples selected. Please select samples above to view data.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Static Map Image -->
+    <div class="map-container">
+        <h3>Sampling Locations</h3>
+        <p>Markers indicate where each sample was collected along the creek.</p>
+        <img src="mataian_map.jpg" alt="Map of Matai'an Fan Sampling Locations">
+    </div>
+
+    <!-- Download Section -->
+    <div class="download-section">
+        <button class="btn-success" id="downloadFullBtn">📥 Download Full Dataset (CSV)</button>
+        <p style="margin-top: 10px; font-size: 14px; color: #555;">Download the complete dataset containing all samples, sieve sizes, passing percentages, and location data.</p>
+    </div>
+
+    <!-- Data Dictionary -->
+    <div class="data-dictionary">
+        <h3>Data Dictionary</h3>
+        <p>The table below outlines the corresponding experimental procedures and specific physical units.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Column Name</th>
+                    <th>Description, Experimental Procedure & Unit</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Category 1 -->
+                <tr class="category-row"><td colspan="2">Sampling & Geospatial Information</td></tr>
+                <tr><td>Sample ID</td><td>Unique alphanumeric identifier for each sampling site.</td></tr>
+                <tr><td>Date_and_time</td><td>Timestamp of field sampling (YYYY-MM-DD HH:MM:SS).</td></tr>
+                <tr><td>Sampler</td><td>Name of the personnel who collected the sample.</td></tr>
+                <tr><td>WGS84_Lat</td><td>Latitude in the WGS84 coordinate system (Decimal Degrees).</td></tr>
+                <tr><td>WGS84_Lon</td><td>Longitude in the WGS84 coordinate system (Decimal Degrees).</td></tr>
+                <tr><td>twd97_E</td><td>Easting in the TWD97 (Taiwan Datum 1997) projected coordinate system (m).</td></tr>
+                <tr><td>twd97_N</td><td>Northing in the TWD97 projected coordinate system (m).</td></tr>
+
+                <!-- Category 2 -->
+                <tr class="category-row"><td colspan="2">Bulk Sample Preparation & Field Moisture</td></tr>
+                <tr><td>Bulk_Dish_g</td><td>Weight of the empty container (W<sub>1</sub>) used for the bulk soil sample (g).</td></tr>
+                <tr><td>Bulk_Wet_Soil_Dish_g</td><td>Weight of the container plus the wet bulk soil (W<sub>2</sub>) immediately retrieved from the field (g).</td></tr>
+                <tr><td>Bulk_AirDry_Soil_Dish_g</td><td>Weight of the container plus the bulk soil (W<sub>3</sub>) after prolonged laboratory air-drying preparation (g).</td></tr>
+                <tr><td>Bulk_Apparent_Moisture_pct</td><td>Apparent field moisture content (w), calculated prior to sieving: [(W<sub>2</sub> - W<sub>3</sub>) / (W<sub>3</sub> - W<sub>1</sub>)] &times; 100% (%).</td></tr>
+
+                <!-- Category 3 -->
+                <tr class="category-row"><td colspan="2">Specific Gravity & Hydrometer Calibration</td></tr>
+                <tr><td>Specific_Gravity_Gs</td><td>Specific gravity of soil solids (G<sub>s</sub>), measured via pycnometer or assigned based on spatial proximity.</td></tr>
+                <tr><td>Hydro_Sample_AirDry_g</td><td>Weight of the air-dried fine soil fraction prepared for the hydrometer sedimentation test (g).</td></tr>
+                <tr><td>Hygro_Dish_g</td><td>Weight of the empty weighing bottle used for hygroscopic moisture determination (g).</td></tr>
+                <tr><td>Hygro_Wet_Soil_Dish_g</td><td>Weight of the weighing bottle plus air-dried fine soil before oven-drying (g).</td></tr>
+                <tr><td>Hygro_Dry_Soil_Dish_g</td><td>Weight of the weighing bottle plus absolute dry soil after oven-drying at 105&deg;C for 24 hours (g).</td></tr>
+                <tr><td>Air_Dry_Moisture_pct</td><td>Hygroscopic moisture content of the air-dried fines (%).</td></tr>
+                <tr><td>Hydro_Absolute_Dry_Soil_g</td><td>Absolute oven-dry mass of the soil used in the hydrometer test (W<sub>s</sub>), corrected as: [Air-dry mass / (1 + Hygroscopic moisture)] (g).</td></tr>
+
+                <!-- Category 4 -->
+                <tr class="category-row"><td colspan="2">Sedimentation (Hydrometer) & Sieve Analysis</td></tr>
+                <tr><td>Hydro_Time_min</td><td>Array of elapsed observation times during the hydrometer test (min).</td></tr>
+                <tr><td>Hydro_Reading</td><td>Array of uncorrected hydrometer readings (R) corresponding to the elapsed times.</td></tr>
+                <tr><td>Hydro_Temp_C</td><td>Array of suspension temperatures recorded at each hydrometer reading (&deg;C).</td></tr>
+                <tr><td>Sieve_Opening_mm</td><td>Array of standard sieve opening sizes used in the mechanical sieve analysis for coarse fractions (mm).</td></tr>
+                <tr><td>Sieve_Retained_g</td><td>Array of the mass of dry soil retained on each respective standard sieve (g).</td></tr>
+
+                <!-- Category 5 -->
+                <tr class="category-row"><td colspan="2">Particle Size Fractions (By Diameter D)</td></tr>
+                <tr><td>Gravel_pct_75_to_4_75mm</td><td>Percentage of Gravel (75 mm &gt; D &ge; 4.75 mm, retained on No.4 sieve) (%).</td></tr>
+                <tr><td>Coarse_Sand_pct_...</td><td>Percentage of Coarse Sand (4.75 mm &gt; D &ge; 2.0 mm) (%).</td></tr>
+                <tr><td>Medium_Sand_pct_...</td><td>Percentage of Medium Sand (2.0 mm &gt; D &ge; 0.425 mm) (%).</td></tr>
+                <tr><td>Fine_Sand_pct_...</td><td>Percentage of Fine Sand (0.425 mm &gt; D &ge; 0.075 mm) (%).</td></tr>
+                <tr><td>Silt_pct_0_075_to_...</td><td>Percentage of Silt (0.075 mm &gt; D &ge; 0.005 mm, passing No.200 sieve) (%).</td></tr>
+                <tr><td>Clay_pct_lt_0_005mm</td><td>Percentage of Clay (D &lt; 0.005 mm) (%).</td></tr>
+
+                <!-- Category 6 -->
+                <tr class="category-row"><td colspan="2">Gradation Curve & Index Properties</td></tr>
+                <tr><td>Curve_Size_mm</td><td>Array of merged particle diameters (D) derived from both sieve and hydrometer analyses (mm).</td></tr>
+                <tr><td>Curve_Passing_pct</td><td>Array of cumulative percent passing corresponding to each particle diameter (%).</td></tr>
+                <tr><td>D60_mm</td><td>Particle diameter at 60% passing (D<sub>60</sub>) (mm).</td></tr>
+                <tr><td>D50_mm</td><td>Median particle diameter (D<sub>50</sub>) at 50% passing (mm).</td></tr>
+                <tr><td>D30_mm</td><td>Particle diameter at 30% passing (D<sub>30</sub>) (mm).</td></tr>
+                <tr><td>D10_mm</td><td>Effective particle diameter (D<sub>10</sub>) at 10% passing (mm).</td></tr>
+                <tr><td>Cu</td><td>Coefficient of Uniformity (C<sub>u</sub> = D<sub>60</sub> / D<sub>10</sub>), evaluating the gradation spread.</td></tr>
+                <tr><td>Cc</td><td>Coefficient of Curvature [C<sub>c</sub> = D<sub>30</sub><sup>2</sup> / (D<sub>10</sub> &times; D<sub>60</sub>)], evaluating the gradation symmetry.</td></tr>
+            </tbody>
+        </table>
+
+        <!-- Dataset Notes -->
+        <div class="dataset-notes">
+            <strong>Dataset Notes:</strong>
+            <ul>
+                <li>Values recorded as <code>-1</code> within the arrays indicate that the specific measurement was skipped, unmeasured, or deemed inapplicable for that particular sample.</li>
+                <li>Samples <strong>M5g</strong> and <strong>M5h</strong> represent suspended sediment samples collected directly from the river using water bottles, and thus follow a different collection protocol compared to standard bed material samples.</li>
+                <li><strong>Specific Gravity (G<sub>s</sub>) Assignments:</strong> Actual specific gravity measurements (using a pycnometer) were only conducted on representative samples <strong>M1, M3a, and M5a</strong>. Assuming that nearby sediments share similar physical properties, these measured <code>Specific_Gravity_Gs</code> values were assigned to adjacent samples based on spatial proximity as follows:
+                    <ul>
+                        <li><strong>M1</strong> data assigned to: 5, 6A, 6B, 6C, M1, M2.</li>
+                        <li><strong>M3a</strong> data assigned to: 1, 2, 3, 4, M3a, M3b, M3c, M4.</li>
+                        <li><strong>M5a</strong> data assigned to: M5a, M5b, M5c, M5d, M5e, M5f, M5g, M5h.</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const csvFileName = "Mataian_Sediment_Data.csv";
+    let parsedData = [];
+
+    // Fetch and Parse the CSV File
+    Papa.parse(csvFileName, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+            parsedData = results.data;
+            populateCheckboxes();
+        },
+        error: function(err) {
+            console.error("Error reading CSV.", err);
+            document.getElementById('checkboxList').innerHTML = '<span style="color:red;">Error loading data</span>';
+        }
+    });
+
+    // Populate the Checkbox List
+    function populateCheckboxes() {
+        const container = document.getElementById('checkboxList');
+        container.innerHTML = ''; // Clear loading text
+        
+        // Samples to be selected by default
+        const defaultSelected = ['1', '2', '3'];
+
+        parsedData.forEach(row => {
+            if(row['Sample ID']) {
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = row['Sample ID'];
+                checkbox.className = 'sample-checkbox';
+                
+                // Pre-select '1', '2', '3' if they exist
+                if (defaultSelected.includes(row['Sample ID'])) {
+                    checkbox.checked = true;
+                }
+
+                // Add event listener to each checkbox
+                checkbox.addEventListener('change', updatePlotAndTable);
+                
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(row['Sample ID']));
+                container.appendChild(label);
+            }
+        });
+
+        // Trigger initial plot and table draw
+        updatePlotAndTable();
+    }
+
+    // Select All Button
+    document.getElementById('selectAllBtn').addEventListener('click', () => {
+        const checkboxes = document.querySelectorAll('.sample-checkbox');
+        checkboxes.forEach(cb => cb.checked = true);
+        updatePlotAndTable();
+    });
+
+    // Clear All Button
+    document.getElementById('clearAllBtn').addEventListener('click', () => {
+        const checkboxes = document.querySelectorAll('.sample-checkbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        updatePlotAndTable();
+    });
+
+    // Update Plot and Table based on selected checkboxes
+    function updatePlotAndTable() {
+        // Get all checked checkboxes
+        const checkboxes = document.querySelectorAll('.sample-checkbox:checked');
+        const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+        
+        const tableBody = document.getElementById('paramsTableBody');
+
+        if (selectedIds.length === 0) {
+            Plotly.purge('plot');
+            tableBody.innerHTML = '<tr><td colspan="7" style="color: #777;">No samples selected. Please select samples above to view data.</td></tr>';
+            return;
+        }
+
+        let traces = [];
+        let tableHTML = '';
+
+        // Process each selected sample
+        selectedIds.forEach(id => {
+            const rowData = parsedData.find(row => row['Sample ID'] === id);
+            
+            if (rowData) {
+                const rawSizes = stringToArray(rowData['Curve_Size_mm']);
+                const rawPassing = stringToArray(rowData['Curve_Passing_pct']);
+
+                // --- DATA CLEANING LOGIC ---
+                let pairs = [];
+                for (let i = 0; i < rawSizes.length; i++) {
+                    if (rawPassing[i] !== -1 && rawSizes[i] !== -1) {
+                        pairs.push({ size: rawSizes[i], pass: rawPassing[i] });
+                    }
+                }
+
+                // Sort ascending by sieve size
+                pairs.sort((a, b) => a.size - b.size);
+
+                let cleanSizes = [];
+                let cleanPassing = [];
+
+                for (let i = 0; i < pairs.length; i++) {
+                    cleanSizes.push(pairs[i].size);
+                    cleanPassing.push(pairs[i].pass);
+                    if (pairs[i].pass >= 100) {
+                        break; 
+                    }
+                }
+
+                // Create Plotly trace for this sample
+                traces.push({
+                    x: cleanSizes,
+                    y: cleanPassing,
+                    mode: 'lines+markers',
+                    type: 'scatter',
+                    name: id,
+                    line: { shape: 'linear', width: 2 },
+                    marker: { size: 6 }
+                });
+
+                // Generate table row HTML for this sample
+                tableHTML += `
+                    <tr>
+                        <td>${id}</td>
+                        <td>${formatVal(rowData['D60_mm'])}</td>
+                        <td>${formatVal(rowData['D50_mm'])}</td>
+                        <td>${formatVal(rowData['D30_mm'])}</td>
+                        <td>${formatVal(rowData['D10_mm'])}</td>
+                        <td>${formatVal(rowData['Cu'])}</td>
+                        <td>${formatVal(rowData['Cc'])}</td>
+                    </tr>
+                `;
+            }
+        });
+
+        // Update the table
+        tableBody.innerHTML = tableHTML;
+
+        // Draw Plotly Chart with all traces
+        const layout = {
+            title: `Particle Size Distribution Comparison`,
+            xaxis: {
+                title: 'Particle Size (mm)',
+                type: 'log',
+                autorange: 'reversed' // Fine particles on the right, coarse on the left
+            },
+            yaxis: {
+                title: 'Percent Passing (%)',
+                range: [0, 105]
+            },
+            margin: { t: 50, b: 50, l: 60, r: 40 },
+            legend: { x: 1.05, y: 1 } // Position legend outside to right
+        };
+
+        Plotly.newPlot('plot', traces, layout);
+    }
+
+    // Helper to clean array strings from CSV like "[2,5,15]" -> [2, 5, 15]
+    function stringToArray(str) {
+        if (!str) return [];
+        return str.replace(/[\[\]"]/g, '').split(',').map(Number);
+    }
+
+    // Helper to format values for the table (handle empty or undefined fields nicely)
+    function formatVal(val) {
+        return (val === undefined || val === null || val.trim() === '') ? '-' : Number(val).toFixed(2);
+    }
+
+    // Download Full CSV
+    document.getElementById('downloadFullBtn').addEventListener('click', () => {
+        const link = document.createElement('a');
+        link.href = csvFileName;
+        link.download = csvFileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+</script>
+
+</body>
+</html>
