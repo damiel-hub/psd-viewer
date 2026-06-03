@@ -57,8 +57,17 @@
 <body>
 
 <div class="container">
-    <h1>Matai'an Fan Sediment Dataset</h1>
-    <p>Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves. The table below the chart will update automatically to show their corresponding parameters.</p>
+    <h1 id="pageTitle">Matai'an Fan Sediment Dataset</h1>
+    
+    <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 6px; border: 1px solid #bbdefb;">
+        <label for="datasetSelector" style="font-weight: bold; font-size: 16px; margin-right: 10px; color: #0d47a1;">Select Dataset (選擇資料集):</label>
+        <select id="datasetSelector" style="padding: 8px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; width: 300px;">
+            <option value="downstream">Downstream Alluvial Fan (下游沖積扇)</option>
+            <option value="upstream">Upstream Landslide Area (上游崩塌區)</option>
+        </select>
+    </div>
+
+    <p id="pageDesc">Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves. The table below the chart will update automatically to show their corresponding parameters.</p>
     
     <div class="controls">
         <div class="sample-selector">
@@ -104,8 +113,7 @@
     <!-- Static Map Image -->
     <div class="map-container">
         <h3>Sampling Locations</h3>
-        <p>Markers indicate where each sample was collected along the creek.</p>
-        <img src="mataian_map.jpg" alt="Map of Matai'an Fan Sampling Locations">
+        <img id="mapImage" src="mataian_map.jpg" alt="Map of Matai'an Fan Sampling Locations">
     </div>
 
     <!-- Download Section -->
@@ -203,22 +211,56 @@
 </div>
 
 <script>
-    const csvFileName = "Mataian_Sediment_Data.csv";
+    const datasets = {
+        downstream: {
+            title: "Matai'an Fan Sediment Dataset",
+            csv: "Mataian_Sediment_Data.csv",
+            map: "mataian_map.jpg",
+            desc: "Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves for the downstream alluvial fan."
+        },
+        upstream: {
+            title: "Matai'an Upstream Landslide Sediment Dataset",
+            csv: "TG26801P3_Mataian_Sediment_Data.csv",
+            map: "mataian_upstream_map1.jpg",
+            desc: "Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves for the upstream landslide area."
+        }
+    };
+
+    let currentDatasetKey = 'downstream';
     let parsedData = [];
 
-    // Fetch and Parse the CSV File
-    Papa.parse(csvFileName, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-            parsedData = results.data;
-            populateCheckboxes();
-        },
-        error: function(err) {
-            console.error("Error reading CSV.", err);
-            document.getElementById('checkboxList').innerHTML = '<span style="color:red;">Error loading data</span>';
-        }
+    function loadDataset(key) {
+        currentDatasetKey = key;
+        const config = datasets[key];
+        
+        document.getElementById('pageTitle').innerText = config.title;
+        document.getElementById('pageDesc').innerText = config.desc;
+        document.getElementById('mapImage').src = config.map;
+        
+        document.getElementById('checkboxList').innerHTML = 'Loading samples...';
+        
+        // Fetch and Parse the CSV File
+        Papa.parse(config.csv, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                parsedData = results.data;
+                populateCheckboxes();
+            },
+            error: function(err) {
+                console.error("Error reading CSV.", err);
+                document.getElementById('checkboxList').innerHTML = '<span style="color:red;">Error loading data</span>';
+            }
+        });
+    }
+
+    // Initialize
+    loadDataset(currentDatasetKey);
+
+    // Event Listener for Dataset Dropdown
+    document.getElementById('datasetSelector').addEventListener('change', (e) => {
+        loadDataset(e.target.value);
     });
 
     // Populate the Checkbox List
@@ -226,8 +268,9 @@
         const container = document.getElementById('checkboxList');
         container.innerHTML = ''; // Clear loading text
         
-        // Samples to be selected by default
-        const defaultSelected = ['1', '2', '3'];
+        // Extract the first 3 valid sample IDs to select them by default
+        const validSamples = parsedData.filter(row => row['Sample ID']).map(row => row['Sample ID']);
+        const defaultSelected = validSamples.slice(0, 3);
 
         parsedData.forEach(row => {
             if(row['Sample ID']) {
@@ -378,8 +421,9 @@
     // Download Full CSV
     document.getElementById('downloadFullBtn').addEventListener('click', () => {
         const link = document.createElement('a');
-        link.href = csvFileName;
-        link.download = csvFileName;
+        const config = datasets[currentDatasetKey];
+        link.href = config.csv;
+        link.download = config.csv;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
