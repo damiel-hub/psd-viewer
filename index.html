@@ -34,7 +34,9 @@
         .dynamic-table-container { margin-bottom: 30px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;}
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
-        th { background-color: #f8f9fa; }
+        th { background-color: #f8f9fa; cursor: pointer; user-select: none; position: relative; padding-right: 20px; transition: background-color 0.2s;}
+        th:hover { background-color: #e2e6ea; }
+        .sort-icon { position: absolute; right: 4px; font-size: 10px; color: #666; top: 50%; transform: translateY(-50%); }
         td:first-child { font-weight: bold; }
 
         .map-container { text-align: center; margin-top: 20px; border-top: 2px solid #eee; padding-top: 20px;}
@@ -93,13 +95,13 @@
         <table>
             <thead>
                 <tr>
-                    <th>Sample ID</th>
-                    <th>D<sub>60</sub> (mm)</th>
-                    <th>D<sub>50</sub> (mm)</th>
-                    <th>D<sub>30</sub> (mm)</th>
-                    <th>D<sub>10</sub> (mm)</th>
-                    <th>C<sub>u</sub></th>
-                    <th>C<sub>c</sub></th>
+                    <th onclick="sortTable(0)" title="Click to sort">Sample ID <span class="sort-icon"></span></th>
+                    <th onclick="sortTable(1)" title="Click to sort">D<sub>60</sub> (mm) <span class="sort-icon"></span></th>
+                    <th onclick="sortTable(2)" title="Click to sort">D<sub>50</sub> (mm) <span class="sort-icon"></span></th>
+                    <th onclick="sortTable(3)" title="Click to sort">D<sub>30</sub> (mm) <span class="sort-icon"></span></th>
+                    <th onclick="sortTable(4)" title="Click to sort">D<sub>10</sub> (mm) <span class="sort-icon"></span></th>
+                    <th onclick="sortTable(5)" title="Click to sort">C<sub>u</sub> <span class="sort-icon"></span></th>
+                    <th onclick="sortTable(6)" title="Click to sort">C<sub>c</sub> <span class="sort-icon"></span></th>
                 </tr>
             </thead>
             <tbody id="paramsTableBody">
@@ -228,9 +230,12 @@
 
     let currentDatasetKey = 'downstream';
     let parsedData = [];
+    let currentSortColumn = -1;
+    let currentSortAscending = true;
 
     function loadDataset(key) {
         currentDatasetKey = key;
+        currentSortColumn = -1; // Reset sort on dataset change
         const config = datasets[key];
         
         document.getElementById('pageTitle').innerText = config.title;
@@ -405,6 +410,63 @@
         };
 
         Plotly.newPlot('plot', traces, layout);
+
+        // Maintain sort state if a column was already sorted
+        if (currentSortColumn !== -1) {
+            currentSortAscending = !currentSortAscending; // Negate to maintain current direction after sortTable toggles it
+            sortTable(currentSortColumn);
+        } else {
+            document.querySelectorAll('.dynamic-table-container th .sort-icon').forEach(icon => icon.innerHTML = '');
+        }
+    }
+
+    function sortTable(columnIndex) {
+        const tableBody = document.getElementById("paramsTableBody");
+        const rows = Array.from(tableBody.querySelectorAll("tr"));
+        
+        // If there's only the "No samples selected" row, do nothing
+        if (rows.length === 0 || (rows.length === 1 && rows[0].cells.length === 1)) {
+            return;
+        }
+
+        // Toggle sort direction if clicking the same column
+        if (currentSortColumn === columnIndex) {
+            currentSortAscending = !currentSortAscending;
+        } else {
+            currentSortColumn = columnIndex;
+            currentSortAscending = true;
+        }
+
+        // Update headers icons
+        document.querySelectorAll('.dynamic-table-container th .sort-icon').forEach(icon => icon.innerHTML = '');
+        const currentIcon = document.querySelectorAll('.dynamic-table-container th')[columnIndex].querySelector('.sort-icon');
+        if (currentIcon) {
+            currentIcon.innerHTML = currentSortAscending ? '▲' : '▼';
+        }
+
+        rows.sort((a, b) => {
+            const cellA = a.cells[columnIndex].innerText.trim();
+            const cellB = b.cells[columnIndex].innerText.trim();
+
+            let valA, valB;
+
+            if (columnIndex === 0) {
+                // Alpha-numeric sort for Sample ID
+                const regex = /(\d+)/g;
+                valA = cellA.replace(regex, (match) => match.padStart(10, '0'));
+                valB = cellB.replace(regex, (match) => match.padStart(10, '0'));
+            } else {
+                valA = cellA === '-' ? -Infinity : parseFloat(cellA);
+                valB = cellB === '-' ? -Infinity : parseFloat(cellB);
+            }
+
+            if (valA < valB) return currentSortAscending ? -1 : 1;
+            if (valA > valB) return currentSortAscending ? 1 : -1;
+            return 0;
+        });
+
+        tableBody.innerHTML = '';
+        rows.forEach(row => tableBody.appendChild(row));
     }
 
     // Helper to clean array strings from CSV like "[2,5,15]" -> [2, 5, 15]
