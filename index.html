@@ -240,7 +240,9 @@
         
         document.getElementById('pageTitle').innerText = config.title;
         document.getElementById('pageDesc').innerText = config.desc;
-        document.getElementById('mapImage').src = config.map;
+        
+        // Add cache-busting parameter to ensure the latest image is fetched
+        document.getElementById('mapImage').src = config.map + '?v=' + new Date().getTime();
         
         document.getElementById('checkboxList').innerHTML = 'Loading samples...';
         
