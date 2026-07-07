@@ -66,6 +66,7 @@
         <select id="datasetSelector" style="padding: 8px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; width: 300px;">
             <option value="downstream">Downstream Alluvial Fan (下游沖積扇)</option>
             <option value="upstream">Upstream Landslide Area (上游崩塌區)</option>
+            <option value="combine">Combine All (全部)</option>
         </select>
     </div>
 
@@ -113,7 +114,7 @@
     </div>
 
     <!-- Static Map Image -->
-    <div class="map-container">
+    <div class="map-container" id="mapContainer">
         <h3>Sampling Locations</h3>
         <img id="mapImage" src="mataian_map.jpg" alt="Map of Matai'an Fan Sampling Locations">
     </div>
@@ -217,14 +218,20 @@
         downstream: {
             title: "Matai'an Fan Sediment Dataset",
             csv: "mataian_downstream_fan.csv",
-            map: "mataian_map.jpg",
+            map: ["mataian_map.jpg"],
             desc: "Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves for the downstream alluvial fan."
         },
         upstream: {
             title: "Matai'an Upstream Landslide Sediment Dataset",
             csv: "mataian_upstream_landslide.csv",
-            map: "mataian_upstream_map1.jpg",
+            map: ["mataian_upstream_map1.jpg"],
             desc: "Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves for the upstream landslide area."
+        },
+        combine: {
+            title: "Matai'an Combined Sediment Dataset",
+            csv: ["mataian_downstream_fan.csv", "mataian_upstream_landslide.csv"],
+            map: ["mataian_map.jpg", "mataian_upstream_map1.jpg"],
+            desc: "Select one or multiple samples below to compare their Particle Size Distribution (PSD) curves for both downstream and upstream."
         }
     };
 
@@ -233,7 +240,23 @@
     let currentSortColumn = -1;
     let currentSortAscending = true;
 
-    function loadDataset(key) {
+    function fetchCSV(url) {
+        return new Promise((resolve, reject) => {
+            Papa.parse(url, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    resolve(results.data);
+                },
+                error: function(err) {
+                    reject(err);
+                }
+            });
+        });
+    }
+
+    async function loadDataset(key) {
         currentDatasetKey = key;
         currentSortColumn = -1; // Reset sort on dataset change
         const config = datasets[key];
@@ -241,25 +264,38 @@
         document.getElementById('pageTitle').innerText = config.title;
         document.getElementById('pageDesc').innerText = config.desc;
         
-        // Add cache-busting parameter to ensure the latest image is fetched
-        document.getElementById('mapImage').src = config.map + '?v=' + new Date().getTime();
+        const mapContainer = document.getElementById('mapContainer');
+        mapContainer.innerHTML = '<h3>Sampling Locations</h3>';
+        
+        let mapFiles = Array.isArray(config.map) ? config.map : [config.map];
+        mapFiles.forEach(mapSrc => {
+            const img = document.createElement('img');
+            img.src = mapSrc + '?v=' + new Date().getTime();
+            img.alt = "Sampling Map";
+            img.style.maxWidth = "100%";
+            img.style.height = "auto";
+            img.style.border = "1px solid #ddd";
+            img.style.borderRadius = "4px";
+            img.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
+            img.style.marginBottom = "20px";
+            mapContainer.appendChild(img);
+        });
         
         document.getElementById('checkboxList').innerHTML = 'Loading samples...';
         
-        // Fetch and Parse the CSV File
-        Papa.parse(config.csv, {
-            download: true,
-            header: true,
-            skipEmptyLines: true,
-            complete: function(results) {
-                parsedData = results.data;
-                populateCheckboxes();
-            },
-            error: function(err) {
-                console.error("Error reading CSV.", err);
-                document.getElementById('checkboxList').innerHTML = '<span style="color:red;">Error loading data</span>';
+        try {
+            let csvFiles = Array.isArray(config.csv) ? config.csv : [config.csv];
+            let allData = [];
+            for (let file of csvFiles) {
+                let data = await fetchCSV(file);
+                allData = allData.concat(data);
             }
-        });
+            parsedData = allData;
+            populateCheckboxes();
+        } catch(err) {
+            console.error("Error reading CSV.", err);
+            document.getElementById('checkboxList').innerHTML = '<span style="color:red;">Error loading data</span>';
+        }
     }
 
     // Initialize
@@ -479,18 +515,22 @@
 
     // Helper to format values for the table (handle empty or undefined fields nicely)
     function formatVal(val) {
-        return (val === undefined || val === null || val.trim() === '') ? '-' : Number(val).toFixed(2);
+        return (val === undefined || val === null || val.trim() === '') ? '-' : Number(val).toFixed(4);
     }
 
     // Download Full CSV
     document.getElementById('downloadFullBtn').addEventListener('click', () => {
-        const link = document.createElement('a');
         const config = datasets[currentDatasetKey];
-        link.href = config.csv;
-        link.download = config.csv;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        let csvFiles = Array.isArray(config.csv) ? config.csv : [config.csv];
+        
+        csvFiles.forEach(file => {
+            const link = document.createElement('a');
+            link.href = file;
+            link.download = file;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
     });
 </script>
 
